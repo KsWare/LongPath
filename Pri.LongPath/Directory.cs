@@ -169,12 +169,7 @@ namespace Pri.LongPath
 		/// </exception>
 		public static void Delete(string path)
 		{
-			var normalizedPath = path;
-			if (!Common.IsPathUnc(path))
-			{
-				normalizedPath = Path.NormalizeLongPath(path);
-			}
-
+			var normalizedPath = Path.NormalizeLongPath(path);
 			if (!NativeMethods.RemoveDirectory(normalizedPath))
 			{
 				throw Common.GetExceptionFromLastWin32Error();
@@ -305,16 +300,11 @@ namespace Pri.LongPath
 		/// </exception>
 		public static IEnumerable<string> EnumerateDirectories(string path, string searchPattern)
 		{
-			if (Common.IsPathUnc(path))
-				return System.IO.Directory.EnumerateDirectories(path, searchPattern ?? "*", System.IO.SearchOption.TopDirectoryOnly);
-
 			return EnumerateFileSystemEntries(path, searchPattern, true, false, System.IO.SearchOption.TopDirectoryOnly);
 		}
 
 		public static IEnumerable<string> EnumerateDirectories(string path, string searchPattern, System.IO.SearchOption options)
 		{
-			if (Common.IsPathUnc(path))
-				return System.IO.Directory.EnumerateDirectories(path, searchPattern, options);
 			return EnumerateFileSystemEntries(path, searchPattern, true, false, options);
 		}
 #endif
@@ -420,16 +410,11 @@ namespace Pri.LongPath
 		/// </exception>
 		public static IEnumerable<string> EnumerateFiles(string path, string searchPattern)
 		{
-			if (Common.IsPathUnc(path))
-				return System.IO.Directory.EnumerateFiles(path, searchPattern);
-
 			return EnumerateFileSystemEntries(path, searchPattern, false, true, System.IO.SearchOption.TopDirectoryOnly);
 		}
 
 		public static IEnumerable<string> EnumerateFiles(string path, string searchPattern, System.IO.SearchOption options)
 		{
-			if (Common.IsPathUnc(path))
-				return System.IO.Directory.EnumerateFiles(path, searchPattern, options);
 			return EnumerateFileSystemEntries(path, searchPattern, false, true, options);
 		}
 #endif
@@ -536,17 +521,11 @@ namespace Pri.LongPath
 		/// </exception>
 		public static IEnumerable<string> EnumerateFileSystemEntries(string path, string searchPattern)
 		{
-			if (Common.IsPathUnc(path))
-				return System.IO.Directory.EnumerateFileSystemEntries(path, searchPattern ?? "*");
-
 			return EnumerateFileSystemEntries(path, searchPattern, true, true, System.IO.SearchOption.TopDirectoryOnly);
 		}
 
 		public static IEnumerable<string> EnumerateFileSystemEntries(string path, string searchPattern, System.IO.SearchOption options)
 		{
-			if (Common.IsPathUnc(path))
-				return System.IO.Directory.EnumerateFileSystemEntries(path, searchPattern ?? "*", options);
-
 			return EnumerateFileSystemEntries(path, searchPattern, true, true, options);
 		}
 #endif
@@ -593,16 +572,18 @@ namespace Pri.LongPath
 				{
 					if (IsDirectory(findData.dwFileAttributes))
 					{
-						if (includeDirectories && !IsCurrentOrParentDirectory(findData.cFileName))
+                        if (IsCurrentOrParentDirectory(findData.cFileName)) continue;
+
+						if (includeDirectories)
 						{
-							yield return Path.Combine(path, findData.cFileName);
+							yield return Path.Combine(Path.RemoveLongPathPrefix(path), findData.cFileName);
 						}
 					}
 					else
 					{
 						if (includeFiles)
 						{
-							yield return Path.Combine(path, findData.cFileName);
+							yield return Path.Combine(Path.RemoveLongPathPrefix(path), findData.cFileName);
 						}
 					}
 				} while (NativeMethods.FindNextFile(handle, out findData));
@@ -640,19 +621,19 @@ namespace Pri.LongPath
 						var fullPath = Path.Combine(path, findData.cFileName);
 						if (IsDirectory(findData.dwFileAttributes))
 						{
+                            if (IsCurrentOrParentDirectory(findData.cFileName)) continue;
 							var fullNormalizedPath = Path.Combine(normalizedPath, findData.cFileName);
 							System.Diagnostics.Debug.Assert(Exists(fullPath));
 							System.Diagnostics.Debug.Assert(Exists(Common.IsPathUnc(fullNormalizedPath) ? fullNormalizedPath : Path.RemoveLongPathPrefix(fullNormalizedPath)));
-							if (IsCurrentOrParentDirectory(findData.cFileName)) continue;
 
 							if (includeDirectories)
 							{
-								yield return fullPath;
+								yield return Path.RemoveLongPathPrefix(fullPath);
 							}
 						}
 						else if (includeFiles)
 						{
-							yield return fullPath;
+                            yield return Path.RemoveLongPathPrefix(fullPath);
 						}
 					} while (NativeMethods.FindNextFile(handle, out findData));
 
@@ -727,7 +708,7 @@ namespace Pri.LongPath
 			}
 			while (pathComponents.Count > 0)
 			{
-				var str = pathComponents[pathComponents.Count - 1];
+				var str = Path.NormalizeLongPath(pathComponents[pathComponents.Count - 1]);
 				pathComponents.RemoveAt(pathComponents.Count - 1);
 
 				if (NativeMethods.CreateDirectory(str, IntPtr.Zero)) continue;
@@ -891,10 +872,7 @@ namespace Pri.LongPath
 		public static DirectoryInfo CreateDirectory(String path, DirectorySecurity directorySecurity)
 		{
 			CreateDirectory(path);
-			if(Common.IsPathUnc(path))
-				System.IO.Directory.SetAccessControl(path, directorySecurity);
-			else
-				SetAccessControl(path, directorySecurity);
+			SetAccessControl(path, directorySecurity);
 			return new DirectoryInfo(path);
 		}
 
